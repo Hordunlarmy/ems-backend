@@ -1,75 +1,60 @@
-use sqlx::{PgPool, postgres::PgRow, Row, Error, Transaction};
-use dotenvy::dotenv;
-use std::env;
+use sqlx::{
+    postgres::{PgArguments, PgPoolOptions, PgRow},
+    query_with, Error, PgPool, Postgres,
+};
+
+pub enum SqlParam<'a> {
+    Int(i32),
+    Text(&'a str),
+    Bool(bool),
+    // Add more as needed
+}
 
 pub struct Database {
-    pub pool: PgPool,
+    pool: PgPool,
 }
 
 impl Database {
-    pub async fn new() -> Result<Self, Error> {
-
-        let db_url = env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set");
-
-        let max_connections = env::var("MAX_CONNECTIONS")
-            .ok()
-            .and_then(|val| val.parse::<u32>().ok())
-            .unwrap_or(5);
-
-        let pool = sqlx::PgPoolOptions::new()
+    pub async fn new(database_url: &str, max_connections: u32) -> Result<Self, Error> {
+        let pool = PgPoolOptions::new()
             .max_connections(max_connections)
-            .connect(&db_url)
+            .connect(database_url)
             .await?;
-
         Ok(Self { pool })
     }
 
-    pub async fn save(&self, query: &str, params: Vec<&(dyn sqlx::Encode<'_> + sqlx::Type<Postgres>)>) -> Result<u64, Error> {
-        let mut q = sqlx::query(query);
+    pub fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+
+    fn bind_params<'q>(mut query: sqlx::query::Query<'q, Postgres, PgArguments>, params: &[SqlParam<'q>]) -> sqlx::query::Query<'q, Postgres, PgArguments> {
         for param in params {
-            q = q.bind(param);
+            query = match param {
+                SqlParam::Int(i) => query.bind(*i),
+                SqlParam::Text(s) => query.bind(*s),
+                SqlParam::Bool(b) => query.bind(*b),
+            }
         }
-        let result = q.execute(&self.pool).await?;
+        query
+    }
+
+    pub async fn save<'q>(&self, sql: &str, params: &[SqlParam<'q>]) -> Result<u64, Error> {
+        let query = query_with(sql, PgArguments::default());
+        let query = Self::bind_params(query, params);
+        let result = query.execute(&self.pool).await?;
         Ok(result.rows_affected())
     }
 
-    pub async fn get(&self, query: &str, params: Vec<&(dyn sqlx::Encode<'_> + sqlx::Type<Postgres>)>) -> Result<PgRow, Error> {
-        let mut q = sqlx::query(query);
-        for param in params {
-            q = q.bind(param);
-        }
-        let row = q.fetch_one(&self.pool).await?;
-        Ok(row)
+    pub async fn get<'q>(&self, sql: &str, params: &[SqlParam<'q>]) -> Result<PgRow, Error> {
+        let query = query_with(sql, PgArguments::default());
+        let query = Self::bind_params(query, params);
+        query.fetch_one(&self.pool).await
     }
 
-    pub async fn select(&self, query: &str, params: Vec<&(dyn sqlx::Encode<'_> + sqlx::Type<Postgres>)>) -> Result<Vec<PgRow>, Error> {
-        let mut q = sqlx::query(query);
-        for param in params {
-            q = q.bind(param);
-        }
-        let rows = q.fetch_all(&self.pool).await?;
-        Ok(rows)
-    }
-
-    pub async fn transaction<F, T>(&self, f: F) -> Result<T, Error>
-    where
-        F: FnOnce(&mut Transaction<'_, sqlx::Postgres>) -> Result<T, Error>,
-    {
-        let mut tx = self.pool.begin().await?;
-
-        let result = f(&mut tx).await;
-
-        match result {
-            Ok(val) => {
-                tx.commit().await?;
-                Ok(val)
-            }
-            Err(err) => {
-                tx.rollback().await?;
-                Err(err)
-            }
-        }
+    pub async fn select<'q>(&self, sql: &str, params: &[SqlParam<'q>]) -> Result<Vec<PgRow>, Error> {
+        let query = query_with(sql, PgArguments::default());
+        let query = Self::bind_params(query, params);
+        query.fetch_all(&self.pool).await
     }
 }
 

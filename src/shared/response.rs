@@ -21,11 +21,4 @@ impl<T: Serialize> APIResponse<T> {
         }
     }
 
-    pub fn error(message: &str, status_code: u16) -> Self {
-        Self {
-            message: message.to_string(),
-            status_code,
-            error: None,
-        }
-    }
 }

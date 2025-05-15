@@ -18,6 +18,7 @@ use tower_http::{
 
 mod shared;
 use shared::response::APIResponse;
+use shared::database::Database;
 
 #[tokio::main]
 async fn main() {
