@@ -36,6 +36,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(root_handler))
+        .route("/health", get(health_check_handler))
         .layer(middleware_stack);
 
     let listener = tokio::net::TcpListener::bind(&addr)
@@ -48,6 +49,11 @@ async fn main() {
 
 async fn root_handler() -> impl IntoResponse {
     let response = APIResponse::success("Hello, world!", None);
+    (StatusCode::OK, Json(response))
+}
+
+async fn health_check_handler() -> impl IntoResponse {
+    let response = APIResponse::success("OK", None);
     (StatusCode::OK, Json(response))
 }
 

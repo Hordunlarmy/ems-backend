@@ -1,0 +1,57 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    image: ems-backend-app:${ENV:-dev}
+    ports:
+      - "${APP_PORT:-3001}:${APP_PORT:-3001}"
+    volumes:
+      - .:/workspace/ems-backend
+    environment:
+      - ENV=${ENV:-dev}
+    env_file:
+      - profiles/${ENV:-dev}/.env.app
+    restart: always
+    depends_on:
+      - database
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${APP_PORT:-3001}/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - ems-network
+
+  database:
+    image: postgres:latest
+    restart: always
+    ports:
+      - "${POSTGRES_PORT:-5111}:5432"
+    environment:
+      - ENV=${ENV:-dev}
+    env_file:
+      - profiles/${ENV:-dev}/.env.database
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+      - ./schema/triggers.sql:/docker-entrypoint-initdb.d/02-triggers.sql
+      - ./schema/init-data.sql:/docker-entrypoint-initdb.d/03-init-data.sql
+      - ./schema/${DUMP_ENV:-dev}-dump.sql:/docker-entrypoint-initdb.d/04-${DUMP_ENV:-dev}-dump.sql
+    command: postgres -c log_min_messages=notice -c logging_collector=off -c log_destination=stderr
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-postgres}"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - ems-network
+
+networks:
+  ems-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
