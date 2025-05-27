@@ -5,7 +5,7 @@ services:
       dockerfile: docker/app/Dockerfile
     image: ems-backend-app:${ENV:-dev}
     ports:
-      - "${APP_PORT:-3001}:${APP_PORT:-3001}"
+      - "${APP_PORT:-3000}:3000"
     volumes:
       - .:/workspace/ems-backend
     environment:
@@ -16,7 +16,7 @@ services:
     depends_on:
       - database
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${APP_PORT:-3001}/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 60s
       timeout: 10s
       retries: 3

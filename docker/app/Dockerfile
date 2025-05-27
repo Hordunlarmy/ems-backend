@@ -18,6 +18,4 @@ COPY docker/app/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 COPY --from=builder /workspace/ems-backend/target/release/ems-backend /usr/local/bin/ems-backend
 
-EXPOSE 3000
-
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
